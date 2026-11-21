@@ -1,0 +1,45 @@
+# ==============================================================================
+# File: .github/workflows/ci-terraform.yml
+# Mục đích: Pipeline CI tự động kiểm tra chất lượng mã nguồn Hạ tầng (IaC Governance)
+# Chức năng: Kiểm tra chuẩn định dạng (terraform fmt) và tính hợp lệ (terraform validate)
+#            cho cả 7 Modules lẫn 2 môi trường (floci & prod) mỗi khi có commit mới.
+# ==============================================================================
+name: CI Terraform Validation
+
+on:
+  push:
+    branches: [ "main", "uat" ]
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/ci-terraform.yml'
+  pull_request:
+    branches: [ "main", "uat" ]
+    paths:
+      - 'terraform/**'
+
+jobs:
+  terraform-check:
+    name: Validate 7 Modules & Multi-Environments
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        env: [ "floci", "prod" ]
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup HashiCorp Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      - name: Check Terraform Formatting
+        run: terraform fmt -check -recursive terraform/
+
+      - name: Terraform Init (Offline Mode)
+        working-directory: ./terraform/environments/${{ matrix.env }}
+        run: terraform init -backend=false
+
+      - name: Terraform Validate (${{ matrix.env }})
+        working-directory: ./terraform/environments/${{ matrix.env }}
+        run: terraform validate

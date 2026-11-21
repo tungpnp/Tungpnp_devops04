@@ -1,0 +1,24 @@
+{
+  "name": "api-gateway",
+  "version": "1.0.0",
+  "description": "Realtime BFF Microservice",
+  "main": "index.js",
+  "scripts": {
+    "start": "node --require @opentelemetry/auto-instrumentations-node/register index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "redis": "^4.6.13",
+    "express-rate-limit": "^7.2.0",
+    "rate-limit-redis": "^4.2.0",
+    "http-proxy-middleware": "^3.0.0",
+    "winston": "^3.11.0",
+    "winston-daily-rotate-file": "^4.7.1",
+    "prom-client": "^15.0.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.37.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.39.1",
+    "@opentelemetry/sdk-node": "^0.39.1"
+  }
+}

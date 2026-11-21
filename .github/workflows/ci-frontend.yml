@@ -1,0 +1,72 @@
+# ==============================================================================
+# File: .github/workflows/ci-frontend.yml
+# Mục đích: Pipeline CI/CD GitOps cho Frontend React (Vite + Nginx)
+# ==============================================================================
+name: CI Frontend React
+
+on:
+  push:
+    branches: [ "main", "uat" ]
+    paths:
+      - 'source/frontend-react/**'
+
+jobs:
+  build-and-sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: ./source/frontend-react/package-lock.json
+
+      - name: Build Frontend Static Bundle
+        working-directory: ./source/frontend-react
+        run: |
+          npm ci
+          npm run build
+
+      - name: Login to GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Docker Image
+        run: |
+          OWNER_LOWER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          IMAGE_NAME="ghcr.io/${OWNER_LOWER}/frontend-react"
+          VERSION="v1.0.${{ github.run_number }}"
+          echo "IMAGE_TAG=${IMAGE_NAME}:${VERSION}" >> $GITHUB_ENV
+          docker build -t ${IMAGE_NAME}:${VERSION} ./source/frontend-react
+          docker push ${IMAGE_NAME}:${VERSION}
+
+      - name: Update Kubernetes Manifest for ArgoCD Sync
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          git config --global user.email "bot@github.com"
+          git config --global user.name "GitHub Actions GitOps Bot"
+
+          if [ -n "$PAT_TOKEN" ]; then
+            git clone https://${{ github.repository_owner }}:${PAT_TOKEN}@github.com/${{ github.repository_owner }}/k3s-manifest-repo-ci-cd.git manifest-repo
+            cd manifest-repo
+            sed -i "s|image: ghcr.io/.*/frontend-react:.*|image: ${IMAGE_TAG}|g" apps/frontend.yaml
+            git add apps/frontend.yaml
+            git commit -m "chore(gitops): auto update frontend-react tag [skip ci]"
+            git push origin HEAD
+          else
+            sed -i "s|image: ghcr.io/.*/frontend-react:.*|image: ${IMAGE_TAG}|g" k8s-manifests/apps/frontend.yaml
+            git add k8s-manifests/apps/frontend.yaml
+            git commit -m "chore(gitops): auto update frontend-react tag [skip ci]" || exit 0
+            git push
+          fi

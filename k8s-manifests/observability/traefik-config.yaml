@@ -1,0 +1,22 @@
+# ==============================================================================
+# File: k8s-manifests/observability/traefik-config.yaml
+# Mục đích: Mở Service nội bộ trỏ vào cổng Metrics :9100 sẵn có của Traefik Ingress
+#           giúp Prometheus thu thập thống kê HTTP Status (2xx, 4xx, 5xx) & Latency
+# ==============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: traefik-metrics
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: traefik
+spec:
+  selector:
+    app.kubernetes.io/instance: traefik-kube-system
+    app.kubernetes.io/name: traefik
+  ports:
+    - name: metrics
+      protocol: TCP
+      port: 9101
+      targetPort: 9100
+  type: ClusterIP

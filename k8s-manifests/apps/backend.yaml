@@ -1,0 +1,135 @@
+# ==============================================================================
+# File: k8s-manifests/apps/backend.yaml
+# Mục đích: Triển khai Java Spring Boot Backend (Auth, Order, Portfolio, Kafka Producer)
+# Kiến trúc 12-Factor & AWS Parity:
+#   - Cấu hình kết nối DB/JWT/Demo nạp qua K8s Secret 'trading-cloud-secrets'
+#     (tương đương EKS External Secrets / AWS Secrets Manager trên Production)
+#   - Gắn OpenTelemetry Java Agent tự động gửi Distributed Traces về Grafana Tempo
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-java-deployment
+  namespace: default
+  labels:
+    app: backend-java
+    tier: coreback
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend-java
+  template:
+    metadata:
+      labels:
+        app: backend-java
+        tier: coreback
+    spec:
+      nodeSelector:
+        coreback: "true" # Hard-Tenancy: ép lịch chạy trên node chuyên dụng Core Backend
+      containers:
+        - name: backend-java
+          image: ghcr.io/tungpnp/backend-java:v1.0.0
+          imagePullPolicy: IfNotPresent # Cho phép dùng image build cục bộ hoặc pull GHCR ở CI/CD
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://postgres-service:5432/userdb"
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: trading-cloud-secrets
+                  key: POSTGRES_USER
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: trading-cloud-secrets
+                  key: POSTGRES_PASSWORD
+            - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka-service:9092"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: trading-cloud-secrets
+                  key: JWT_SECRET
+            - name: APP_DEMO_SEED_ENABLED
+              valueFrom:
+                secretKeyRef:
+                  name: trading-cloud-secrets
+                  key: APP_DEMO_SEED_ENABLED
+            - name: APP_DEMO_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: trading-cloud-secrets
+                  key: APP_DEMO_USERNAME
+            - name: APP_DEMO_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: trading-cloud-secrets
+                  key: APP_DEMO_PASSWORD
+            # Trỏ file cấu hình Logback custom có gắn trace_id từ ConfigMap
+            - name: LOGGING_CONFIG
+              value: "file:/config/logback.xml"
+            # Kích hoạt OpenTelemetry Zero-Code Instrumentation gửi Trace về Tempo
+            - name: JAVA_TOOL_OPTIONS
+              value: "-Xms256m -Xmx512m -javaagent:/app/opentelemetry-javaagent.jar"
+            - name: OTEL_SERVICE_NAME
+              value: "backend-java"
+            - name: OTEL_TRACES_EXPORTER
+              value: "otlp"
+            - name: OTEL_METRICS_EXPORTER
+              value: "none"
+            - name: OTEL_LOGS_EXPORTER
+              value: "none"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://tempo-service:4318"
+          volumeMounts:
+            - name: logback-config
+              mountPath: /config
+            - name: varlog
+              mountPath: /app/logs
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 25
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 45
+            periodSeconds: 15
+            failureThreshold: 4
+          resources:
+            requests:
+              memory: "384Mi"
+              cpu: "200m"
+            limits:
+              memory: "768Mi"
+              cpu: "800m"
+      volumes:
+        - name: logback-config
+          configMap:
+            name: backend-log-config
+        - name: varlog
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-java-service
+  namespace: default
+  labels:
+    app: backend-java
+spec:
+  selector:
+    app: backend-java
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
+  type: ClusterIP

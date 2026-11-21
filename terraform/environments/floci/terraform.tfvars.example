@@ -1,0 +1,46 @@
+# File: terraform/environments/floci/terraform.tfvars.example
+# Mục đích: File mẫu cấu hình thông số cho môi trường giả lập Floci (An toàn để commit lên GitHub Public)
+# Cách dùng:
+#   1. Copy file này thành terraform.tfvars (file terraform.tfvars đã được chặn bởi .gitignore)
+#   2. Điền giá trị db_password và jwt_secret riêng của bạn (hoặc truyền qua biến môi trường TF_VAR_db_password / TF_VAR_jwt_secret)
+
+aws_region     = "ap-southeast-1"
+aws_profile    = "floci"
+floci_endpoint = "http://localhost:4566"
+project_name   = "tungpnp-trading"
+environment    = "floci"
+
+# Quy hoạch dải mạng riêng cho Floci (10.10.0.0/16)
+vpc_cidr             = "10.10.0.0/16"
+public_subnet_cidrs  = ["10.10.1.0/24", "10.10.2.0/24"]
+private_subnet_cidrs = ["10.10.10.0/24", "10.10.11.0/24"]
+availability_zones   = ["ap-southeast-1a", "ap-southeast-1b"]
+enable_nat_gateway   = false
+single_nat_gateway   = true
+enable_eks_tags      = true
+
+# Tham số Secrets & Database (KHÔNG điền mật khẩu thật vào file mẫu này!)
+db_name                 = "userdb"
+db_username             = "devops"
+db_password             = "CHANGE_ME_LOCAL_DB_PASSWORD"
+jwt_secret              = "CHANGE_ME_JWT_SECRET_AT_LEAST_32_CHARS_LONG"
+recovery_window_in_days = 0
+db_instance_class       = "db.t3.micro"
+db_allocated_storage    = 20
+multi_az                = false
+skip_final_snapshot     = true
+enable_elasticache      = true
+redis_node_type         = "cache.t3.micro"
+
+# Tham số Messaging
+max_receive_count = 3
+
+# Tham số Storage & ECR
+ecr_repositories     = ["frontend-react", "api-gateway", "backend-java", "backend-python"]
+force_destroy_bucket = true
+
+# Tham số Compute EKS & ALB
+cluster_name       = "tungpnp-trading-eks"
+kubernetes_version = "1.30"
+enable_eks         = true
+enable_alb         = true

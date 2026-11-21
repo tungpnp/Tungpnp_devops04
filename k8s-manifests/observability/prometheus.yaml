@@ -1,0 +1,156 @@
+# ==============================================================================
+# File: k8s-manifests/observability/prometheus.yaml
+# Mục đích: Triển khai Prometheus Server thu thập Metrics toàn cụm Floci K3s:
+#   - Ứng dụng: api-gateway (:3001/metrics), backend-java (:8080/actuator/prometheus)
+#   - Dữ liệu: postgres-exporter (:9187), redis-exporter (:9121), kafka-exporter (:9308)
+#   - Hạ tầng K3s: node-exporter (:9100), kube-state-metrics (:8080), traefik (:9101)
+# AWS Parity: Tương đương Amazon Managed Service for Prometheus (AMP) trên Production
+# ==============================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "nodes/proxy", "services", "endpoints", "pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["extensions", "networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch"]
+  - nonResourceURLs: ["/metrics"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: default
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: default
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    scrape_configs:
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+
+      - job_name: 'api-gateway'
+        metrics_path: '/metrics'
+        static_configs:
+          - targets: ['api-gateway-service:3001']
+
+      - job_name: 'backend-java'
+        metrics_path: '/actuator/prometheus'
+        static_configs:
+          - targets: ['backend-java-service:8080']
+
+      - job_name: 'postgres-exporter'
+        static_configs:
+          - targets: ['postgres-service:9187']
+
+      - job_name: 'redis-exporter'
+        static_configs:
+          - targets: ['redis-service:9121']
+
+      - job_name: 'kafka-exporter'
+        static_configs:
+          - targets: ['kafka-service:9308']
+
+      - job_name: 'node-exporter'
+        static_configs:
+          - targets: ['node-exporter-service.default.svc.cluster.local:9100']
+
+      - job_name: 'kube-state-metrics'
+        static_configs:
+          - targets: ['kube-state-metrics.default.svc.cluster.local:8080']
+
+      - job_name: 'traefik'
+        static_configs:
+          - targets: ['traefik-metrics.kube-system.svc.cluster.local:9101']
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: default
+  labels:
+    app: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      serviceAccountName: prometheus
+      nodeSelector:
+        monitor: "true" # Hard-Tenancy: gom nhóm Observability vào node monitor=true
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.51.2
+          args:
+            - "--config.file=/etc/prometheus/prometheus.yml"
+            - "--storage.tsdb.path=/prometheus"
+            - "--storage.tsdb.retention.time=3d"
+            - "--web.enable-lifecycle"
+          ports:
+            - containerPort: 9090
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/prometheus
+            - name: storage-volume
+              mountPath: /prometheus
+          resources:
+            requests:
+              memory: "192Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+      volumes:
+        - name: config-volume
+          configMap:
+            name: prometheus-config
+        - name: storage-volume
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-service
+  namespace: default
+  labels:
+    app: prometheus
+spec:
+  selector:
+    app: prometheus
+  ports:
+    - name: http
+      protocol: TCP
+      port: 9090
+      targetPort: 9090
+  type: ClusterIP

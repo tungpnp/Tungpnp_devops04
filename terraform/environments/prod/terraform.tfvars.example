@@ -1,0 +1,43 @@
+# File: terraform/environments/prod/terraform.tfvars.example
+# Mục đích: File mẫu cấu hình thông số cho môi trường AWS Production (Region Singapore)
+# Cách dùng: Copy thành terraform.tfvars và truyền db_password/jwt_secret qua biến môi trường bảo mật
+
+aws_region   = "ap-southeast-1"
+aws_profile  = "default"
+project_name = "tungpnp-trading"
+environment  = "prod"
+
+# Quy hoạch dải mạng Production không chồng lấn (10.40.0.0/16)
+vpc_cidr             = "10.40.0.0/16"
+public_subnet_cidrs  = ["10.40.1.0/24", "10.40.2.0/24"]
+private_subnet_cidrs = ["10.40.10.0/24", "10.40.11.0/24"]
+availability_zones   = ["ap-southeast-1a", "ap-southeast-1b"]
+enable_nat_gateway   = true
+single_nat_gateway   = false # Multi-AZ HA: Mỗi AZ 1 NAT Gateway độc lập
+enable_eks_tags      = true
+
+# Tham số Secrets & Database Production
+db_name                 = "userdb"
+db_username             = "devops"
+db_password             = "CHANGE_ME_PRODUCTION_STRONG_PASSWORD"
+jwt_secret              = "CHANGE_ME_PRODUCTION_JWT_SECRET_MIN_32_CHARS"
+recovery_window_in_days = 30
+db_instance_class       = "db.t3.medium"
+db_allocated_storage    = 100
+multi_az                = true
+skip_final_snapshot     = false
+enable_elasticache      = true
+redis_node_type         = "cache.t3.small"
+
+# Tham số Messaging
+max_receive_count = 3
+
+# Tham số Storage & ECR
+ecr_repositories     = ["frontend-react", "api-gateway", "backend-java", "backend-python"]
+force_destroy_bucket = false # Chống xóa nhầm bucket trên Production
+
+# Tham số Compute EKS & ALB
+cluster_name       = "tungpnp-trading-eks"
+kubernetes_version = "1.30"
+enable_eks         = true
+enable_alb         = true

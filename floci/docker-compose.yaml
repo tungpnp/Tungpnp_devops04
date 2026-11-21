@@ -1,0 +1,100 @@
+# ==============================================================================
+# File: floci/docker-compose.yaml
+# Mục đích: Khởi chạy toàn bộ Hệ sinh thái Cloud-Native cục bộ cho Đồ án DevOps04:
+#   1. floci-aws (Cổng 4566): Bộ giả lập AWS APIs quản lý 100% bởi Terraform (7 Modules)
+#   2. floci-ui  (Cổng 4500): Giao diện Web Dashboard trực quan cho Floci
+#   3. floci-k3s (Cổng 6443, 80, 443): Cụm Kubernetes K3s chạy chung mạng Docker
+#      với Floci (đồng bộ chuẩn cổng 80/443 với cụm On-Premise & Production)
+# ==============================================================================
+
+services:
+  # 1. Bộ giả lập AWS Floci Core
+  floci-aws:
+    image: floci/floci:latest
+    container_name: devops04-floci-aws
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=iam,sts,kms,secretsmanager,ssm,ec2,ecr,ecs,eks,elb,elbv2,lambda,s3,rds,elasticache,dynamodb,sqs,sns,logs,cloudwatch,route53
+      - AWS_DEFAULT_REGION=ap-southeast-1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data:/app/data
+    networks:
+      - floci-net
+    restart: unless-stopped
+
+  # 2. Giao diện Web Quản trị Floci (Truy cập http://localhost:4500)
+  floci-ui:
+    image: floci/floci-ui:0.7.0
+    container_name: devops04-floci-ui
+    ports:
+      - "4500:4500"
+    environment:
+      - AWS_DEFAULT_REGION=ap-southeast-1
+      - AWS_REGION=ap-southeast-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_SESSION_TOKEN=test
+      - FLOCI_HOSTNAME=devops04-floci-aws
+      - FLOCI_ENDPOINT=http://devops04-floci-aws:4566
+      - AWS_ENDPOINT_URL=http://devops04-floci-aws:4566
+      - PORT=4500
+      - FLOCI_CLOUD=aws
+    depends_on:
+      - floci-aws
+    networks:
+      - floci-net
+    restart: unless-stopped
+
+  # 3. Cụm Kubernetes K3s chạy trực tiếp trong mạng Floci (Data Plane cho Apps, Monitor & ArgoCD)
+  floci-k3s:
+    image: rancher/k3s:v1.30.5-k3s1
+    container_name: devops04-floci-k3s
+    # Khóa cứng hostname để K3s luôn đăng ký cùng một Node 'floci-k3s' khi container recreate
+    hostname: floci-k3s
+    privileged: true
+    cgroup: host
+    tmpfs:
+      - /run
+      - /var/run
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 65535
+        hard: 65535
+    command:
+      - server
+      - --tls-san=127.0.0.1
+      - --tls-san=localhost
+      - --tls-san=floci-k3s
+      - --tls-san=devops04-floci-k3s
+      - --write-kubeconfig-mode=644
+    environment:
+      - K3S_KUBECONFIG_OUTPUT=/output/kubeconfig.yaml
+      - K3S_KUBECONFIG_MODE=666
+    ports:
+      - "6443:6443" # Cổng điều khiển Kubernetes API (kubectl)
+      # Chuẩn hóa cổng Ingress về 80/443 giống On-Premise (*.tungpnp.local) và AWS ALB
+      - "80:80"     # Cổng HTTP Traefik Ingress (Web Trading, ArgoCD, Grafana, Kibana)
+      - "443:443"   # Cổng HTTPS Traefik Ingress
+    volumes:
+      # Dùng Docker named volume (ext4 trong WSL2/Linux VM) thay vì bind-mount NTFS trên Windows
+      # để containerd snapshotter (overlayfs) và kubelet hoạt động ổn định 100%.
+      - floci-k3s-data:/var/lib/rancher/k3s
+      - ./k3s-kubeconfig:/output
+    depends_on:
+      - floci-aws
+    networks:
+      - floci-net
+    restart: unless-stopped
+
+# Định nghĩa volume Linux ext4 cho dữ liệu etcd & containerd của cụm K3s
+volumes:
+  floci-k3s-data:
+    name: devops04-floci-k3s-data
+
+networks:
+  floci-net:
+    name: devops04-floci-net
+    driver: bridge

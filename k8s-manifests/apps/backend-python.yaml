@@ -1,0 +1,74 @@
+# ==============================================================================
+# File: k8s-manifests/apps/backend-python.yaml
+# Mục đích: Triển khai Python FastAPI Microservice (AI/Data Analytics Service)
+# AWS Parity: Tham chiếu biến môi trường hạ tầng AWS (S3, SQS, Floci Endpoint)
+#             từ ConfigMap 'trading-aws-config' (tách biệt cấu hình khỏi code)
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-python-deployment
+  namespace: default
+  labels:
+    app: backend-python
+    tier: coreback
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend-python
+  template:
+    metadata:
+      labels:
+        app: backend-python
+        tier: coreback
+    spec:
+      nodeSelector:
+        coreback: "true"
+      containers:
+        - name: backend-python
+          image: ghcr.io/tungpnp/backend-python:v1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          # Nạp toàn bộ tham số AWS (Floci Endpoint, S3 Bucket, SQS Queue URL) từ Terraform outputs
+          envFrom:
+            - configMapRef:
+                name: trading-aws-config
+                optional: true
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "300m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-python-service
+  namespace: default
+  labels:
+    app: backend-python
+spec:
+  selector:
+    app: backend-python
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8000
+      targetPort: 8000
+  type: ClusterIP

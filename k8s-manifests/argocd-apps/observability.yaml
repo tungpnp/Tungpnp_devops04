@@ -1,0 +1,26 @@
+# ==============================================================================
+# File: k8s-manifests/argocd-apps/observability.yaml
+# Mục đích: ArgoCD Application quản lý Bộ Giám sát Toàn diện (Prometheus, Grafana, ELK, Tempo)
+# ==============================================================================
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: trading-observability
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/tungpnp/devops04-trading-platform.git
+    targetRevision: HEAD
+    path: k8s-manifests/observability
+    directory:
+      exclude: "Grafana_dashboard_export/*"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

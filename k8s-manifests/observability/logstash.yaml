@@ -1,0 +1,103 @@
+# ==============================================================================
+# File: k8s-manifests/observability/logstash.yaml
+# Mục đích: Triển khai Logstash bóc tách Logback/JSON Logs (gồm trace_id) đẩy vào Elasticsearch
+# ==============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logstash-config
+  namespace: default
+data:
+  logstash.yml: |
+    http.host: "0.0.0.0"
+    xpack.monitoring.enabled: false
+  logstash.conf: |
+    input {
+      beats {
+        port => 5044
+      }
+    }
+    filter {
+      if [message] =~ /^\{.*\}$/ {
+        json {
+          source => "message"
+          skip_on_invalid_json => true
+        }
+      }
+      grok {
+        match => { "message" => "trace_id=%{DATA:trace_id}\]" }
+        tag_on_failure => []
+      }
+    }
+    output {
+      elasticsearch {
+        hosts => ["http://elasticsearch-service:9200"]
+        index => "trading-logs-%{+YYYY.MM.dd}"
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logstash
+  namespace: default
+  labels:
+    app: logstash
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: logstash
+  template:
+    metadata:
+      labels:
+        app: logstash
+    spec:
+      nodeSelector:
+        monitor: "true"
+      containers:
+        - name: logstash
+          image: docker.elastic.co/logstash/logstash:8.13.4
+          env:
+            - name: LS_JAVA_OPTS
+              value: "-Xms256m -Xmx256m"
+          ports:
+            - containerPort: 5044
+              name: beats
+          volumeMounts:
+            - name: config-yml
+              mountPath: /usr/share/logstash/config/logstash.yml
+              subPath: logstash.yml
+            - name: pipeline-conf
+              mountPath: /usr/share/logstash/pipeline/logstash.conf
+              subPath: logstash.conf
+          resources:
+            requests:
+              memory: "384Mi"
+              cpu: "150m"
+            limits:
+              memory: "640Mi"
+              cpu: "500m"
+      volumes:
+        - name: config-yml
+          configMap:
+            name: logstash-config
+        - name: pipeline-conf
+          configMap:
+            name: logstash-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: logstash-service
+  namespace: default
+  labels:
+    app: logstash
+spec:
+  selector:
+    app: logstash
+  ports:
+    - name: beats
+      port: 5044
+      targetPort: 5044
+  type: ClusterIP

@@ -1,0 +1,62 @@
+# ==============================================================================
+# File: source/backend-java/src/main/resources/application.yml
+# Mục đích: Cấu hình Spring Boot chuẩn 12-Factor App (Factor III - Config)
+# Lưu ý bảo mật: Toàn bộ thông tin nhạy cảm (DB Password, JWT Secret) KHÔNG
+# hardcode trong mã nguồn mà nạp động qua Biến môi trường (K8s Secret / Floci SSM)
+# ==============================================================================
+server:
+  port: 8080
+
+spring:
+  application:
+    name: backend-java
+
+  # Cấu hình kết nối PostgreSQL qua biến môi trường (K8s Service / Amazon RDS)
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres-service:5432/userdb}
+    username: ${SPRING_DATASOURCE_USERNAME:devops}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  # Cấu hình Kafka Broker qua biến môi trường
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:kafka-service:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+# Cấu hình JWT Token (Nạp khóa ký động từ AWS SSM Parameter Store / K8s Secret)
+jwt:
+  secret: ${JWT_SECRET:PLEASE_OVERRIDE_VIA_ENV_MIN_32_CHARACTERS_LONG}
+  expiration: ${JWT_EXPIRATION:86400000}
+
+# Cấu hình tài khoản Demo Seeder qua biến môi trường (tùy chọn khi bật demo)
+app:
+  demo:
+    enabled: ${APP_DEMO_SEED_ENABLED:false}
+    username: ${APP_DEMO_USERNAME:demo}
+    password: ${APP_DEMO_PASSWORD:}
+
+# ==============================================================================
+# THÀNH PHẦN GIÁM SÁT (MONITORING & METRICS)
+# Mở khóa endpoint /actuator/prometheus cho Prometheus thu thập chỉ số JVM & HTTP
+# ==============================================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}

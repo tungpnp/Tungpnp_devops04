@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!-- Định nghĩa thư mục lưu log -->
+    <property name="LOGS" value="./logs" />
+
+    <!-- Cấu hình Ghi log ra Console (Để tương thích với kubectl logs trong Kubernetes) -->
+    <appender name="Console" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <charset>UTF-8</charset>
+            <Pattern>
+                %d{yyyy-MM-dd HH:mm:ss} %highlight(%-5level) [%blue(%t)] %yellow(%C{1}): %msg%n%throwable
+            </Pattern>
+        </encoder>
+    </appender>
+
+    <!-- Cấu hình Ghi log ra File vật lý (Hỗ trợ cắt file theo ngày để tránh đầy ổ cứng) -->
+    <appender name="RollingFile" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOGS}/application.log</file>
+        <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+            <charset>UTF-8</charset>
+            <Pattern>%d{yyyy-MM-dd HH:mm:ss} %-5level [%t] %C{1}: %msg%n%throwable</Pattern>
+        </encoder>
+
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <!-- Tên file log xoay vòng mỗi ngày -->
+            <fileNamePattern>${LOGS}/archived/application-%d{yyyy-MM-dd}.log</fileNamePattern>
+            <!-- Giữ lại log của 30 ngày gần nhất -->
+            <maxHistory>30</maxHistory>
+        </rollingPolicy>
+    </appender>
+
+    <!-- Áp dụng cả 2 cấu hình (Console + File) từ mức INFO trở lên -->
+    <root level="info">
+        <appender-ref ref="Console" />
+        <appender-ref ref="RollingFile" />
+    </root>
+
+</configuration>

@@ -1,0 +1,27 @@
+# ==============================================================================
+# File: k8s-manifests/argocd-apps/root-app.yaml
+# Mục đích: Mô hình App-of-Apps trong ArgoCD GitOps (Root Application quản lý toàn bộ cụm)
+# ==============================================================================
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: trading-root-app
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    # Lưu ý: Cập nhật repoURL trỏ đúng về GitHub Repository public của bạn sau khi push
+    repoURL: https://github.com/tungpnp/devops04-trading-platform.git
+    targetRevision: HEAD
+    path: k8s-manifests/argocd-apps
+    directory:
+      exclude: "root-app.yaml"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

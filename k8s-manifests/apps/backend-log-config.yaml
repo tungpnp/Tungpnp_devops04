@@ -1,0 +1,29 @@
+# ==============================================================================
+# File: k8s-manifests/apps/backend-log-config.yaml
+# Mục đích: ConfigMap cấu hình Logback (SLF4J) có gắn Trace ID của OpenTelemetry
+# ==============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-log-config
+  namespace: default
+data:
+  logback.xml: |
+    <configuration>
+        <!-- In ra Console chuẩn 12-Factor Factor XI để Filebeat/Kubectl thu thập -->
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss} %-5level [%thread] [trace_id=%X{trace_id:-}%X{traceId:-}] %logger{36}: %msg%n</pattern>
+            </encoder>
+        </appender>
+        <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+            <file>/app/logs/application.log</file>
+            <encoder>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss} %-5level [%thread] [trace_id=%X{trace_id:-}%X{traceId:-}] %logger{36}: %msg%n</pattern>
+            </encoder>
+        </appender>
+        <root level="INFO">
+            <appender-ref ref="CONSOLE" />
+            <appender-ref ref="FILE" />
+        </root>
+    </configuration>

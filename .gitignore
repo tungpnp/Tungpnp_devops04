@@ -1,0 +1,74 @@
+# ==============================================================================
+# File: .gitignore
+# Mục đích: Bảo vệ tuyệt đối Repo Public khỏi rò rỉ bí mật (Secrets, Credentials,
+# Terraform State, Kubeconfig) và loại bỏ file build rác (node_modules, target)
+# ==============================================================================
+
+# --- 1. Hệ điều hành & IDE ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# --- 2. Node.js / Frontend React ---
+node_modules/
+dist/
+dist-ssr/
+*.local
+npm-debug.log*
+yarn-debug.log*
+
+# --- 3. Java / Maven ---
+target/
+*.jar
+*.war
+*.ear
+*.class
+.mvn/
+
+# --- 4. Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# --- 5. Logs & Dữ liệu runtime ---
+logs/
+*.log
+floci/data/
+floci/k3s-data/
+floci/k3s-kubeconfig/
+
+# --- 6. Bí mật Ứng dụng & Hạ tầng (Tuyệt đối không commit lên GitHub Public) ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*secrets.yaml
+!secrets.example.yaml
+k8s-manifests/**/cloudflared-tunnel.yaml
+
+# --- 7. HashiCorp Terraform (Chuẩn bảo mật Quốc tế) ---
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfplan
+tfplan
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Chặn file biến thật chứa mật khẩu, chỉ cho phép file mẫu .example
+*.tfvars
+!terraform.tfvars.example
+!*.tfvars.example
+*.secret.tfvars

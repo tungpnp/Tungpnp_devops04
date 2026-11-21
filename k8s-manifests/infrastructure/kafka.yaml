@@ -1,0 +1,135 @@
+# ==============================================================================
+# File: k8s-manifests/infrastructure/kafka.yaml
+# Mục đích: Triển khai Zookeeper + Kafka Broker (Dual Listeners) + Sidecar Kafka Exporter
+# Lưu ý: Loại bỏ IP máy ảo VMware cũ, sử dụng service DNS nội bộ của Floci K3s
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zookeeper
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: zookeeper
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: zookeeper
+    spec:
+      nodeSelector:
+        coreback: "true"
+      containers:
+        - name: zookeeper
+          image: confluentinc/cp-zookeeper:7.4.0
+          ports:
+            - containerPort: 2181
+          env:
+            - name: ZOOKEEPER_CLIENT_PORT
+              value: "2181"
+            - name: ZOOKEEPER_TICK_TIME
+              value: "2000"
+            - name: KAFKA_HEAP_OPTS
+              value: "-Xmx256M -Xms128M"
+          resources:
+            requests:
+              memory: "192Mi"
+              cpu: "100m"
+            limits:
+              memory: "384Mi"
+              cpu: "300m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zookeeper-service
+  namespace: default
+spec:
+  selector:
+    app: zookeeper
+  ports:
+    - protocol: TCP
+      port: 2181
+      targetPort: 2181
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: kafka
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      nodeSelector:
+        coreback: "true"
+      containers:
+        - name: kafka
+          image: confluentinc/cp-kafka:7.4.0
+          ports:
+            - containerPort: 9092
+            - containerPort: 9093
+          env:
+            - name: KAFKA_BROKER_ID
+              value: "1"
+            - name: KAFKA_ZOOKEEPER_CONNECT
+              value: "zookeeper-service:2181"
+            - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+              value: "INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT"
+            - name: KAFKA_LISTENERS
+              value: "INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:9093"
+            - name: KAFKA_ADVERTISED_LISTENERS
+              value: "INTERNAL://kafka-service:9092,EXTERNAL://localhost:30092"
+            - name: KAFKA_INTER_BROKER_LISTENER_NAME
+              value: "INTERNAL"
+            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              value: "1"
+            - name: KAFKA_HEAP_OPTS
+              value: "-Xmx512M -Xms256M"
+          resources:
+            requests:
+              memory: "384Mi"
+              cpu: "150m"
+            limits:
+              memory: "768Mi"
+              cpu: "500m"
+        # Sidecar Exporter hút metrics Kafka Broker ra cổng 9308
+        - name: kafka-exporter
+          image: danielqsj/kafka-exporter:v1.7.0
+          command:
+            - /bin/kafka_exporter
+            - --kafka.server=localhost:9092
+          ports:
+            - containerPort: 9308
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-service
+  namespace: default
+spec:
+  selector:
+    app: kafka
+  ports:
+    - name: internal
+      protocol: TCP
+      port: 9092
+      targetPort: 9092
+    - name: external
+      protocol: TCP
+      port: 9093
+      targetPort: 9093
+      nodePort: 30092
+    - name: metrics
+      protocol: TCP
+      port: 9308
+      targetPort: 9308
+  type: NodePort

@@ -1,0 +1,67 @@
+# ==============================================================================
+# File: k8s-manifests/apps/frontend.yaml
+# Mục đích: Triển khai React SPA (Vite build đóng gói trong Nginx Alpine nhẹ nhàng)
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-react-deployment
+  namespace: default
+  labels:
+    app: frontend-react
+    tier: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend-react
+  template:
+    metadata:
+      labels:
+        app: frontend-react
+        tier: web
+    spec:
+      nodeSelector:
+        web: "true"
+      containers:
+        - name: frontend-react
+          image: ghcr.io/tungpnp/frontend-react:v1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "25m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-react-service
+  namespace: default
+  labels:
+    app: frontend-react
+spec:
+  selector:
+    app: frontend-react
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 80
+  type: ClusterIP

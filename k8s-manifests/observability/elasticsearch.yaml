@@ -1,0 +1,92 @@
+# ==============================================================================
+# File: k8s-manifests/observability/elasticsearch.yaml
+# Mục đích: Triển khai Elasticsearch 8.13.4 (Single-node) lưu trữ tập trung Logs
+# Tối ưu tài nguyên cho K3s trong Docker: Heap 512m, Limit 1Gi, check an toàn vm.max_map_count
+# AWS Parity: Tương đương Amazon OpenSearch Service trên Production
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: elasticsearch
+  namespace: default
+  labels:
+    app: elasticsearch
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: elasticsearch
+  template:
+    metadata:
+      labels:
+        app: elasticsearch
+    spec:
+      nodeSelector:
+        monitor: "true"
+      initContainers:
+        - name: check-vm-max-map-count
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              CUR=$(cat /proc/sys/vm/max_map_count 2>/dev/null || echo 0)
+              if [ "$CUR" -lt 262144 ]; then
+                sysctl -w vm.max_map_count=262144 || true
+              fi
+          securityContext:
+            privileged: true
+      containers:
+        - name: elasticsearch
+          image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+          env:
+            - name: discovery.type
+              value: single-node
+            - name: xpack.security.enabled
+              value: "false"
+            - name: ES_JAVA_OPTS
+              value: "-Xms512m -Xmx512m"
+          ports:
+            - containerPort: 9200
+              name: http
+            - containerPort: 9300
+              name: transport
+          volumeMounts:
+            - name: es-data
+              mountPath: /usr/share/elasticsearch/data
+          readinessProbe:
+            httpGet:
+              path: /_cluster/health?local=true
+              port: 9200
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 12
+          resources:
+            requests:
+              memory: "768Mi"
+              cpu: "200m"
+            limits:
+              memory: "1536Mi"
+              cpu: "800m"
+      volumes:
+        - name: es-data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch-service
+  namespace: default
+  labels:
+    app: elasticsearch
+spec:
+  selector:
+    app: elasticsearch
+  ports:
+    - name: http
+      port: 9200
+      targetPort: 9200
+    - name: transport
+      port: 9300
+      targetPort: 9300
+  type: ClusterIP

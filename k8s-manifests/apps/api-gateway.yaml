@@ -1,0 +1,88 @@
+# ==============================================================================
+# File: k8s-manifests/apps/api-gateway.yaml
+# Mục đích: Triển khai Node.js Express API Gateway (Proxy + Redis Rate Limit + Prometheus + OTel)
+# Lưu ý: Xuất endpoint /metrics (Port 3001) cho Prometheus và OTLP Traces về Tempo (4318)
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway-deployment
+  namespace: default
+  labels:
+    app: api-gateway
+    tier: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+        tier: web
+    spec:
+      nodeSelector:
+        web: "true" # Phân vùng Hard-Tenancy: tầng Web/Edge chạy trên node web=true
+      containers:
+        - name: api-gateway
+          image: ghcr.io/tungpnp/api-gateway:v1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3001
+          env:
+            - name: PORT
+              value: "3001"
+            - name: REDIS_URL
+              value: "redis://redis-service:6379"
+            - name: JAVA_BACKEND_URL
+              value: "http://backend-java-service:8080"
+            - name: LOG_METRICS
+              value: "false"
+            - name: ENABLE_RATE_LIMIT
+              value: "false"
+            # Cấu hình OpenTelemetry SDK xuất Trace về Grafana Tempo
+            - name: OTEL_SERVICE_NAME
+              value: "api-gateway"
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: "http/protobuf"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://tempo-service:4318"
+            - name: OTEL_TRACES_EXPORTER
+              value: "otlp"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3001
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3001
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          resources:
+            requests:
+              memory: "96Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "400m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway-service
+  namespace: default
+  labels:
+    app: api-gateway
+spec:
+  selector:
+    app: api-gateway
+  ports:
+    - name: http
+      protocol: TCP
+      port: 3001
+      targetPort: 3001
+  type: ClusterIP

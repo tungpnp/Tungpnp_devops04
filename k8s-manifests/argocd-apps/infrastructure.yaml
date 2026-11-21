@@ -1,0 +1,26 @@
+# ==============================================================================
+# File: k8s-manifests/argocd-apps/infrastructure.yaml
+# Mục đích: ArgoCD Application quản lý tầng Hạ tầng Dữ liệu (PostgreSQL, Redis, Kafka)
+# ==============================================================================
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: trading-infrastructure
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1" # Chạy trước tầng Apps để DB/Cache/Broker sẵn sàng
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/tungpnp/devops04-trading-platform.git
+    targetRevision: HEAD
+    path: k8s-manifests/infrastructure
+    directory:
+      exclude: "*.example.yaml" # Không để ArgoCD sync đè Secret mẫu lên Secret thực tế
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: false # Bảo vệ PVC dữ liệu DB khỏi xóa nhầm khi dọn manifest
+      selfHeal: true
