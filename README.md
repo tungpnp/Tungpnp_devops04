@@ -4,6 +4,17 @@ Dự án xây dựng và triển khai trọn vẹn hệ thống ứng dụng Mic
 
 ---
 
+<!-- Bổ sung mục Video Demo trên YouTube và danh sách các Public URLs thực tế qua Cloudflare Tunnel -->
+## Video Demo & Đường dẫn Truy cập Hệ thống (Live Public URLs)
+
+- **Video Demo Toàn diện Dự án (YouTube):** https://youtu.be/aGAYyvmu5aM — Trình diễn thực tế từ bước khởi tạo hạ tầng Cloud bằng Terraform (7 Modules) trên Floci, vận hành cụm Kubernetes (K3s), luồng CI/CD tự động (GitHub Actions & ArgoCD) đến giám sát toàn diện (Grafana, Tempo, ELK Stack) và public domain qua Cloudflare Tunnel.
+- **Trang Web Ứng dụng Chính (Frontend React & API Gateway):** https://tungpnp.org.uk/ — Giao diện Web Portfolio và hệ thống đăng nhập bảo mật (JWT + Kafka) kết nối cụm Microservices trên K3s.
+- **Hệ thống Giám sát Metrics & Distributed Tracing (Grafana):** https://grafana.tungpnp.org.uk/ — Bảng điều khiển theo dõi chỉ số thời gian thực từ Prometheus (K8s Cluster, Node, JVM, Postgres, Redis, Kafka) và truy vết request qua Grafana Tempo.
+- **Hệ thống Quản lý & Truy vấn Log Tập trung (Kibana - ELK Stack):** https://kibana.tungpnp.org.uk/ — Giao diện tìm kiếm, phân tích log tập trung thu thập từ các Pods ứng dụng qua Filebeat & Logstash.
+- **Hệ thống Quản lý Triển khai GitOps (ArgoCD):** https://argocd.tungpnp.org.uk/ — Giao diện điều phối Continuous Delivery theo mô hình *App-of-Apps*, tự động đồng bộ trạng thái K8s từ GitHub Manifest Repo.
+
+---
+
 ## 1. Kiến trúc & Công nghệ Sử dụng trong Dự án
 
 - **Cloud & VPC:** **Floci** — Giả lập môi trường Cloud thay thế cho AWS và hoàn toàn miễn phí (Free 100%), nhưng vẫn đảm bảo đầy đủ tính năng và API tương tự AWS thực tế (VPC, Subnets, Route Tables, Internet/NAT Gateway, Security Groups, IAM, Secrets Manager, SSM, RDS, ElastiCache, S3, SQS/SNS, ECR, EKS, ALB).
